@@ -8,7 +8,7 @@ import winsound
 # http://www.multigesture.net/articles/how-to-write-an-emulator-chip-8-interpreter/
 # http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
 # https://en.wikipedia.org/wiki/CHIP-8#Opcode_table
-# TODO: FX29 Opcode (font sprites). Fix Collision detection. Pixel wrapping.
+# TODO: FX29 Opcode (font sprites). Fix Collision detection.
 
 class Chip8:
     opcodeSize = 2
@@ -132,7 +132,7 @@ class Chip8:
             if(opcodeFourthNibble == 0x4):    
                 if(self.V[opcodeSecondNibble] + self.V[opcodeThirdNibble] > 255):
                     self.V[0xF] = 1
-                    self.V[opcodeSecondNibble] += self.V[opcodeThirdNibble] - 255
+                    self.V[opcodeSecondNibble] += (self.V[opcodeThirdNibble] - 255)
                 else: 
                     self.V[0xF] = 0
                     self.V[opcodeSecondNibble] += self.V[opcodeThirdNibble]
@@ -192,17 +192,17 @@ class Chip8:
         # VF is set to 1 if any pixels are flipped from 1 to 0
         if(opcodeFirstNibble == 0xD):
             self.drawFlag = True
+            self.V[0xF] = 0
             # Get our X,Y,N values
             startX = self.V[opcodeSecondNibble]
             startY = self.V[opcodeThirdNibble]
             numberOfEightPixelRows = opcodeFourthNibble
-            self.V[0xF] = 0
             
             #XOR these values against what's already in gfx
             pixelIterator = startX + (startY * 64)  # Will keep track of all pixels
             rowIterator = 0 # Will keep track of 8 pixels per row
             columnIterator = 0 # Will keep track of current column
-
+            
             while(columnIterator < numberOfEightPixelRows):
                 
                 pixel = self.memory[self.I + columnIterator]
@@ -211,14 +211,21 @@ class Chip8:
                 while(rowIterator < 8):
                     
                     if pixel & (0x80 >> rowIterator) != 0:
-                        if self.gfx[(startX + rowIterator + ((startY + columnIterator) * 64))] == 1:
-                            self.V[0xF] = 1
-                        self.gfx[(startX + rowIterator + ((startY + columnIterator) * 64))] ^= 1
+                        
+                        if startX + rowIterator > 63: startX = 0
+                        if startY + columnIterator > 31: startY = 0
                     
+                        oldGFX = self.gfx[(startX + rowIterator + ((startY + columnIterator) * 64))]
+                        
+                        self.gfx[(startX + rowIterator + ((startY + columnIterator) * 64))] ^= 1
+                        
+                        newGFX = self.gfx[(startX + rowIterator + ((startY + columnIterator) * 64))]
+                        
+                        if(oldGFX == 1 and newGFX == 0): 
+                            self.V[0xF] = 1
+                            VFSet = True
                     rowIterator += 1
-                self.drawGraphics()
                 columnIterator += 1
-
             self.pc += 2
         
         
@@ -357,7 +364,8 @@ class Chip8:
             if rowIterator >= rowLength:
                 rowIterator = 0
                 columnIterator += 1
-        
+            if startX > rowLength - 1: startX = 0
+            if startY > numberOfColumns - 1: startY = 0
         return
 
     def setKeys(self):
@@ -416,15 +424,12 @@ def main():
         screen.blit(ITitleSurface, (110, 320))
         
         # -------------------Main emulation loop ------------------------- #
-        chip8.processCycle()
-        
+
         if(chip8.drawFlag): 
-            #pixelSurface = chip8.drawGraphics()
+            chip8.drawGraphics()
             screen.blit(chip8.pixelSurface, (0,0))
             
-        chip8.setKeys()
-        
-        gameClock.tick(60)
+        chip8.processCycle()
         
         # ---------------------------------------------------------------- #   
            
@@ -478,5 +483,6 @@ def main():
         
         pygame.display.update() 
         screen.fill((0,0,0))
+        gameClock.tick(300)
 
 main()
